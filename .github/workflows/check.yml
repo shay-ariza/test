@@ -22,7 +22,7 @@ jobs:
       - name: Counts how many videos exists
         id: video_count_prev
         run: |
-          count_prev=$(find attachments -type f | wc -l)
+          count_prev=$(find attachments -type f | grep -E "\.(mov|mp4)$" | wc -l)
           echo "count_prev=$count_prev" >> $GITHUB_OUTPUT
           echo "Found $count_prev files in base"
       - name: Checkout code
@@ -34,7 +34,7 @@ jobs:
       - name: Counts how many videos exists
         id: video_count_new
         run: |
-          count_new=$(find attachments -type f | wc -l)
+          count_new=$(find attachments -type f | grep -E "\.(mov|mp4)$" | wc -l)
           echo "count_new=$count_new" >> $GITHUB_OUTPUT
           echo "Found $count_new files"
       - name: Comment PR with test results
