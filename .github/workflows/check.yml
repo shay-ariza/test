@@ -32,6 +32,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
+      - name: Echo PR info
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Description: ${{ github.event.pull_request.body }}"
+
       - name: Count videos on PR branch
         id: video_count_new
         run: |
@@ -51,6 +56,7 @@ jobs:
             const after  = parseInt(process.env.VIDEO_COUNT_AFTER, 10);
             const diff   = after - before;
             const sign   = diff > 0 ? '+' : '';
+            const status = diff === 1 ? '✅ PASS' : '❌ FAIL - Expected exactly 1 video to be added';
 
             const comment = [
               '## PR Video Attachment Report',
@@ -60,6 +66,8 @@ jobs:
               `| Videos on base branch | ${before} |`,
               `| Videos on PR branch   | ${after} |`,
               `| **Net change**        | **${sign}${diff}** |`,
+              '',
+              `**Status:** ${status} (Expected exactly 1 video to be added)`,
             ].join('\n');
 
             await github.rest.issues.createComment({
@@ -68,3 +76,7 @@ jobs:
               repo: context.repo.repo,
               body: comment,
             });
+
+            if (diff !== 1) {
+              core.setFailed(`Expected exactly 1 video to be added, but diff was ${sign}${diff}`);
+            }
