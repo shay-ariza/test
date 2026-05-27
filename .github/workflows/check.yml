@@ -17,24 +17,33 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Counts how many videos exists
+        id: video_count_prev
+        run: |
+          count_prev=$(find attachments -type f | wc -l)
+          echo "count_prev=$count_prev" >> $GITHUB_OUTPUT
+          echo "Found $count_prev files in base"
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           
       - name: Counts how many videos exists
-        id: video_count
+        id: video_count_new
         run: |
-          count=$(find attachments -type f | wc -l)
-          echo "count=$count" >> $GITHUB_OUTPUT
-          echo "Found $count files"
+          count_new=$(find attachments -type f | wc -l)
+          echo "count_new=$count_new" >> $GITHUB_OUTPUT
+          echo "Found $count_new files"
       - name: Comment PR with test results
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const videoCount = '${{ steps.video_count.outputs.count }}';
+            const videoCountBefore = '${{ steps.video_count_prev.outputs.count_prev }}';
+            const videoCountAfter = '${{ steps.video_count_new.outputs.count_new }}';
             let comment = `## PR Check Report\n\n`;
-            comment += `**Attachments Folder:** Contains ${videoCount} files\n\n`;
+            comment += `**Attachments Folder:** Contains ${videoCountAfter - videoCountBefore} files\n\n`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
