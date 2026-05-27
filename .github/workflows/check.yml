@@ -53,7 +53,7 @@ jobs:
             attachments/**/*.mp4
           retention-days: 7
 
-      - name: Echo artifact URL
+      - name: REST POST the conetent of the artifact
         if: steps.video_count_new.outputs.diff == '1'
         run: |
           ARTIFACT_URL="${{ steps.upload_video.outputs.artifact-url }}"
@@ -66,7 +66,7 @@ jobs:
             "https://default8bcff1709979491e8683d8ced0850b.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/f8ae6c6c9db44c9282cdbdaca3e3149d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=UbwJQjeIyYbYDowL_phSZ7ER3FVLo_6BGHdKnlQet-0" \
             -H "Content-Type: application/json" \
             -d '{
-              "token": "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",
+              "TOKEN": "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",
               "URL": "$API_ARTIFACT_URL",
               "text": "${{ github.event.pull_request.body }}",
               "folderName": "${{ github.event.pull_request.title }}",
