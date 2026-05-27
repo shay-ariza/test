@@ -99,17 +99,17 @@ jobs:
               core.setFailed(`Expected exactly 1 video to be added, but diff was ${sign}${diff}`);
             }
 
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -rf /tmp/new_videos/
-          find attachments -type f \( -name "*.mp4" -o -name "*.mov" \) -delete 2>/dev/null || true
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update attachments [skip ci]"
-            git push origin HEAD:${{ github.event.pull_request.head.ref }}
-          fi
+      # - name: Cleanup
+      #   if: always()
+      #   run: |
+      #     rm -rf /tmp/new_videos/
+      #     find attachments -type f \( -name "*.mp4" -o -name "*.mov" \) -delete 2>/dev/null || true
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
+      #     git add .
+      #     if git diff --cached --quiet; then
+      #       echo "No changes to commit"
+      #     else
+      #       git commit -m "chore: update attachments [skip ci]"
+      #       git push origin HEAD:${{ github.event.pull_request.head.ref }}
+      #     fi
