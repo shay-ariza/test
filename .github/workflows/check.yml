@@ -47,21 +47,20 @@ jobs:
           echo "diff=$diff" >> "$GITHUB_OUTPUT"
           echo "Found $count_new video(s) on PR branch (diff: $diff)"
 
-      - name: Get newest video
+      - name: Upload videos as artifact
         if: steps.video_count_new.outputs.diff == '1'
-        id: new_videos
-        run: |
-          mkdir -p /tmp/new_videos
-          newest=$(find attachments -type f \( -name "*.mov" -o -name "*.mp4" \) -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
-          cp "$newest" /tmp/new_videos/
-
-      - name: Upload new video as artifact
-        if: steps.video_count_new.outputs.diff == '1'
+        id: upload_video
         uses: actions/upload-artifact@v4
         with:
           name: new-video
-          path: /tmp/new_videos/
+          path: |
+            attachments/**/*.mov
+            attachments/**/*.mp4
           retention-days: 7
+
+      - name: Echo artifact URL
+        if: steps.video_count_new.outputs.diff == '1'
+        run: echo "Artifact URL: ${{ steps.upload_video.outputs.artifact-url }}"
 
       - name: Comment PR with video diff
         if: success()
@@ -102,7 +101,6 @@ jobs:
       # - name: Cleanup
       #   if: always()
       #   run: |
-      #     rm -rf /tmp/new_videos/
       #     find attachments -type f \( -name "*.mp4" -o -name "*.mov" \) -delete 2>/dev/null || true
       #     git config user.name "github-actions[bot]"
       #     git config user.email "github-actions[bot]@users.noreply.github.com"
