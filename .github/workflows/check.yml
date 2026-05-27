@@ -1,38 +1,70 @@
-# This is a basic workflow to help you get started with Actions
+name: Video Attachment Check
 
-name: CI
-
-# Controls when the workflow will run
 on:
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: ["main"]
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
 jobs:
-  build:
+  video-count-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 1
+
+      - name: Count videos on base branch
+        id: video_count_prev
+        run: |
+          count_prev=$(find attachments -type f \( -name "*.mov" -o -name "*.mp4" \) | wc -l)
+          echo "count_prev=$count_prev" >> "$GITHUB_OUTPUT"
+          echo "Found $count_prev video(s) on base branch"
+
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-          
-      - name: Counts how many videos exists
-        id: video_count
+          fetch-depth: 1
+
+      - name: Count videos on PR branch
+        id: video_count_new
         run: |
-          count=$(find attachments -type f | wc -l)
-          echo "count=$count" >> $GITHUB_OUTPUT
-          echo "Found $count files"
-      - name: Comment PR with test results
-        if: always()
+          count_new=$(find attachments -type f \( -name "*.mov" -o -name "*.mp4" \) | wc -l)
+          echo "count_new=$count_new" >> "$GITHUB_OUTPUT"
+          echo "Found $count_new video(s) on PR branch"
+
+      - name: Comment PR with video diff
+        if: success()
         uses: actions/github-script@v7
+        env:
+          VIDEO_COUNT_BEFORE: ${{ steps.video_count_prev.outputs.count_prev }}
+          VIDEO_COUNT_AFTER: ${{ steps.video_count_new.outputs.count_new }}
         with:
           script: |
-            let comment = `## PR Check Report\n\n`;
-            comment += `**Videos Folder:** Contains ${count} files\n\n`;
-            github.rest.issues.createComment({
+            const before = parseInt(process.env.VIDEO_COUNT_BEFORE, 10);
+            const after  = parseInt(process.env.VIDEO_COUNT_AFTER, 10);
+            const diff   = after - before;
+            const sign   = diff > 0 ? '+' : '';
+
+            const comment = [
+              '## PR Video Attachment Report',
+              '',
+              `| | Count |`,
+              `|---|---|`,
+              `| Videos on base branch | ${before} |`,
+              `| Videos on PR branch   | ${after} |`,
+              `| **Net change**        | **${sign}${diff}** |`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: comment
+              body: comment,
             });
