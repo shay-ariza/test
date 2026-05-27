@@ -32,7 +32,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
-      - name: Count videos on PR branch and calculate diff
+      - name: Count videos on PR branch and calculate diff.
         env:
           VIDEO_COUNT_BEFORE: ${{ steps.video_count_prev.outputs.count_prev }}
         id: video_count_new
