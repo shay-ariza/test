@@ -70,7 +70,9 @@ jobs:
           VIDEO_COUNT_ADDED: ${{ steps.video_count_new.outputs.diff }}
         with:
           script: |
+            const before = parseInt(process.env.VIDEO_COUNT_BEFORE, 10);
             const diff = parseInt(process.env.VIDEO_COUNT_ADDED, 10);
+            const after  = before + diff;
             const sign   = diff > 0 ? '+' : '';
             const status = diff === 1 ? '✅ PASS' : '❌ FAIL';
 
