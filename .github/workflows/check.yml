@@ -28,8 +28,9 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const videoCount = '${{ steps.video_count.outputs.count }}';
             let comment = `## PR Check Report\n\n`;
-            comment += `**Videos Folder:** Contains ${count} files\n\n`;
+            comment += `**Attachments Folder:** Contains ${videoCount} files\n\n`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
