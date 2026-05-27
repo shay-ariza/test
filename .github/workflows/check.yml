@@ -18,7 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${github.event.pull_request.base.ref}
+          ref: ${{github.event.pull_request.base.ref}}
       - name: Counts how many videos exists
         id: video_count_prev
         run: |
