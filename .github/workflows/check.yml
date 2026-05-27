@@ -60,7 +60,8 @@ jobs:
 
       - name: Echo artifact URL
         if: steps.video_count_new.outputs.diff == '1'
-        run: echo "Artifact URL: ${{ steps.upload_video.outputs.artifact-url }}"
+        run: |
+          echo "Artifact URL: ${{ steps.upload_video.outputs.artifact-url }}"
 
       - name: Comment PR with video diff
         if: success()
