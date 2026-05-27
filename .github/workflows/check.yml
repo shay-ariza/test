@@ -1,49 +1,62 @@
-# This is a basic workflow to help you get started with Actions
-
 name: CI
 
-# Controls when the workflow will run
 on:
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+
 permissions:
   pull-requests: write
   issues: write
   contents: read
+
 jobs:
-  build:
+  count-base:
     runs-on: ubuntu-latest
+    outputs:
+      count_prev: ${{ steps.video_count_prev.outputs.count_prev }}
     steps:
-      - name: Checkout code
+      - name: Checkout base branch
         uses: actions/checkout@v4
         with:
-          ref: ${{github.event.pull_request.base.ref}}
-      - name: Counts how many videos exists
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Count videos on base
         id: video_count_prev
         run: |
           count_prev=$(find attachments -type f | grep -E "\.(mov|mp4)$" | wc -l)
           echo "count_prev=$count_prev" >> $GITHUB_OUTPUT
           echo "Found $count_prev files in base"
-      - name: Checkout code
+
+  count-head:
+    runs-on: ubuntu-latest
+    outputs:
+      count_new: ${{ steps.video_count_new.outputs.count_new }}
+    steps:
+      - name: Checkout head commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-          
-      - name: Counts how many videos exists
+
+      - name: Count videos on head
         id: video_count_new
         run: |
           count_new=$(find attachments -type f | grep -E "\.(mov|mp4)$" | wc -l)
           echo "count_new=$count_new" >> $GITHUB_OUTPUT
-          echo "Found $count_new files"
-      - name: Comment PR with test results
-        if: always()
+          echo "Found $count_new files in head"
+
+  comment-pr:
+    runs-on: ubuntu-latest
+    needs: [count-base, count-head]
+    if: always()
+    steps:
+      - name: Comment PR with results
         uses: actions/github-script@v7
         with:
           script: |
-            const videoCountBefore = '${{ steps.video_count_prev.outputs.count_prev }}';
-            const videoCountAfter = '${{ steps.video_count_new.outputs.count_new }}';
+            const videoCountBefore = parseInt('${{ needs.count-base.outputs.count_prev }}');
+            const videoCountAfter = parseInt('${{ needs.count-head.outputs.count_new }}');
             let comment = `## PR Check Report\n\n`;
             comment += `**Attachments Folder:** Contains ${videoCountAfter - videoCountBefore} files\n\n`;
             github.rest.issues.createComment({
