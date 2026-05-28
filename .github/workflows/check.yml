@@ -32,12 +32,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
-      - name: Echo PR info
-        run: |
-          echo "PR Title: ${{ github.event.pull_request.title }}"
-          echo "PR Description: ${{ github.event.pull_request.body }}"
-
-      - name: Count videos on PR branch and calculate diff
+      - name: Count videos on PR branch and calculate diff.
         env:
           VIDEO_COUNT_BEFORE: ${{ steps.video_count_prev.outputs.count_prev }}
         id: video_count_new
@@ -47,21 +42,36 @@ jobs:
           echo "diff=$diff" >> "$GITHUB_OUTPUT"
           echo "Found $count_new video(s) on PR branch (diff: $diff)"
 
-      - name: Get newest video
+      - name: Upload videos as artifact
         if: steps.video_count_new.outputs.diff == '1'
-        id: new_videos
-        run: |
-          mkdir -p /tmp/new_videos
-          newest=$(find attachments -type f \( -name "*.mov" -o -name "*.mp4" \) -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
-          cp "$newest" /tmp/new_videos/
-
-      - name: Upload new video as artifact
-        if: steps.video_count_new.outputs.diff == '1'
+        id: upload_video
         uses: actions/upload-artifact@v4
         with:
           name: new-video
-          path: /tmp/new_videos/
+          path: |
+            attachments/**/*.mov
+            attachments/**/*.mp4
           retention-days: 7
+
+      - name: REST POST the conetent of the artifact
+        if: steps.video_count_new.outputs.diff == '1'
+        run: |
+          ARTIFACT_URL="${{ steps.upload_video.outputs.artifact-url }}"
+          ARTIFACT_ID="${ARTIFACT_URL##*/}"
+          API_ARTIFACT_URL="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip"
+          echo "API Download URL: $API_ARTIFACT_URL"
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          echo "PR Description: ${{ github.event.pull_request.body }}"
+          curl -X POST \
+            "https://default8bcff1709979491e8683d8ced0850b.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/f8ae6c6c9db44c9282cdbdaca3e3149d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=UbwJQjeIyYbYDowL_phSZ7ER3FVLo_6BGHdKnlQet-0" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"TOKEN\": \"${{ secrets.TOKEN_SECRET }}\",
+              \"URL\": \"$API_ARTIFACT_URL\",
+              \"text\": \"${{ github.event.pull_request.body }}\",
+              \"folderName\": \"${{ github.event.pull_request.title }}\",
+              \"title\": \"fileName.zip\"
+            }"
 
       - name: Comment PR with video diff
         if: success()
@@ -102,7 +112,6 @@ jobs:
       # - name: Cleanup
       #   if: always()
       #   run: |
-      #     rm -rf /tmp/new_videos/
       #     find attachments -type f \( -name "*.mp4" -o -name "*.mov" \) -delete 2>/dev/null || true
       #     git config user.name "github-actions[bot]"
       #     git config user.email "github-actions[bot]@users.noreply.github.com"
