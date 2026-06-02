@@ -65,16 +65,6 @@ jobs:
           echo "diff=$diff" >> "$GITHUB_OUTPUT"
           echo "Found $count_new video(s) on PR branch (diff: $diff)"
 
-      - name: Upload videos as artifact
-        if: steps.video_count_new.outputs.diff > 0
-        id: upload_video
-        uses: actions/upload-artifact@v4
-        with:
-          name: new-video
-          path: |
-            attachments/**/*.mov
-            attachments/**/*.mp4
-
       - name: Compute check result
         id: result
         run: |
@@ -98,8 +88,8 @@ jobs:
         uses: actions/github-script@v7
         env:
           BEFORE: ${{ steps.result.outputs.before }}
-          AFTER:  ${{ steps.result.outputs.after }}
-          DIFF:   ${{ steps.result.outputs.diff }}
+          AFTER: ${{ steps.result.outputs.after }}
+          DIFF: ${{ steps.result.outputs.diff }}
           STATUS: ${{ steps.result.outputs.status }}
         with:
           script: |
@@ -128,10 +118,10 @@ jobs:
       - name: Create check run
         uses: actions/github-script@v7
         env:
-          HEAD_SHA:   ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
+          HEAD_SHA: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
           CONCLUSION: ${{ steps.result.outputs.conclusion }}
-          STATUS:     ${{ steps.result.outputs.status }}
-          DIFF:       ${{ steps.result.outputs.diff }}
+          STATUS: ${{ steps.result.outputs.status }}
+          DIFF: ${{ steps.result.outputs.diff }}
         with:
           script: |
             const diff       = parseInt(process.env.DIFF, 10);
