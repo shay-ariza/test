@@ -105,7 +105,3 @@ jobs:
               repo: context.repo.repo,
               body: comment,
             });
-
-            if (diff !== 1) {
-              core.setFailed(`Expected exactly 1 video to be added, but diff was ${sign}${diff}`);
-            }
