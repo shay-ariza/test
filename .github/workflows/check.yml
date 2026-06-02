@@ -75,38 +75,68 @@ jobs:
             attachments/**/*.mov
             attachments/**/*.mp4
 
-      - name: Report and enforce video attachment policy
+      - name: Compute check result
+        id: result
+        run: |
+          before=${{ steps.video_count_prev.outputs.count_prev }}
+          diff=${{ steps.video_count_new.outputs.diff }}
+          after=$(( before + diff ))
+          if [ "$diff" -eq 1 ]; then
+            conclusion="success"
+            status="✅ PASS"
+          else
+            conclusion="failure"
+            status="❌ FAIL"
+          fi
+          echo "before=$before"         >> "$GITHUB_OUTPUT"
+          echo "after=$after"           >> "$GITHUB_OUTPUT"
+          echo "diff=$diff"             >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          echo "status=$status"         >> "$GITHUB_OUTPUT"
+
+      - name: Post PR comment
         uses: actions/github-script@v7
         env:
-          VIDEO_COUNT_ADDED: ${{ steps.video_count_new.outputs.diff }}
-          VIDEO_COUNT_BEFORE: ${{ steps.video_count_prev.outputs.count_prev }}
-          HEAD_SHA: ${{ steps.pr_from_api.outputs.head }}
+          BEFORE: ${{ steps.result.outputs.before }}
+          AFTER: ${{ steps.result.outputs.after }}
+          DIFF: ${{ steps.result.outputs.diff }}
+          STATUS: ${{ steps.result.outputs.status }}
         with:
           script: |
-            const before = parseInt(process.env.VIDEO_COUNT_BEFORE, 10);
-            const diff = parseInt(process.env.VIDEO_COUNT_ADDED, 10);
-            const after  = before + diff;
-            const sign   = diff > 0 ? '+' : '';
-            const status = diff === 1 ? '✅ PASS' : '❌ FAIL';
-
-            const comment = [
-              '## PR Video Attachment Report',
-              '',
-              `| | Count |`,
-              `|---|---|`,
-              `| Videos on base branch | ${before} |`,
-              `| Videos on PR branch   | ${after} |`,
-              `| **Net change**        | **${sign}${diff}** |`,
-              '',
-              `**Status:** ${status} (Expected exactly 1 video to be added)`,
-            ].join('\n');
+            const before = process.env.BEFORE;
+            const after  = process.env.AFTER;
+            const diff   = parseInt(process.env.DIFF, 10);
+            const status = process.env.STATUS;
 
             await github.rest.issues.createComment({
-              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: comment,
+              issue_number: context.issue.number,
+              body: [
+                '## PR Video Attachment Report',
+                '',
+                '| | Count |',
+                '|---|---|',
+                `| Videos on base branch | ${before} |`,
+                `| Videos on PR branch   | ${after}  |`,
+                `| **Net change**        | **${diff > 0 ? '+' : ''}${diff}** |`,
+                '',
+                `**Status:** ${status} (Expected exactly 1 video to be added)`,
+              ].join('\n'),
             });
+
+      - name: Create check run
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
+          CONCLUSION: ${{ steps.result.outputs.conclusion }}
+          STATUS: ${{ steps.result.outputs.status }}
+          DIFF: ${{ steps.result.outputs.diff }}
+        with:
+          script: |
+            const diff       = parseInt(process.env.DIFF, 10);
+            const conclusion = process.env.CONCLUSION;
+            const status     = process.env.STATUS;
 
             await github.rest.checks.create({
               owner: context.repo.owner,
@@ -116,13 +146,35 @@ jobs:
               status: 'completed',
               conclusion,
               output: {
-                title: diff === 1 ? '✅ PASS' : '❌ FAIL',
+                title: status,
                 summary: `Expected exactly 1 video added, got ${diff > 0 ? '+' : ''}${diff}`,
               },
             });
-            await github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['has_video'],
-            });
+
+      - name: Sync has_video label
+        uses: actions/github-script@v7
+        env:
+          CONCLUSION: ${{ steps.result.outputs.conclusion }}
+        with:
+          script: |
+            const passed = process.env.CONCLUSION === 'success';
+
+            if (passed) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['has_video'],
+              });
+            } else {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: 'has_video',
+                });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
+            }
