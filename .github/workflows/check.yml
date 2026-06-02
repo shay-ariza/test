@@ -80,6 +80,7 @@ jobs:
         env:
           VIDEO_COUNT_ADDED: ${{ steps.video_count_new.outputs.diff }}
           VIDEO_COUNT_BEFORE: ${{ steps.video_count_prev.outputs.count_prev }}
+          HEAD_SHA: ${{ steps.pr_from_api.outputs.head }}
         with:
           script: |
             const before = parseInt(process.env.VIDEO_COUNT_BEFORE, 10);
@@ -107,20 +108,6 @@ jobs:
               body: comment,
             });
 
-            if (diff !== 1) {
-              core.setFailed(`Expected exactly 1 video to be added, but diff was ${sign}${diff}`);
-            }
-
-      - name: Report check run to PR head (comment-triggered only)
-        if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
-        env:
-          HEAD_SHA: ${{ steps.pr_from_api.outputs.head }}
-          VIDEO_DIFF: ${{ steps.video_count_new.outputs.diff }}
-        with:
-          script: |
-            const diff = parseInt(process.env.VIDEO_DIFF, 10);
-            const conclusion = diff === 1 ? 'success' : 'failure';
             await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
