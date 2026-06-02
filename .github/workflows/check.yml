@@ -87,6 +87,7 @@ jobs:
             const diff = parseInt(process.env.VIDEO_COUNT_ADDED, 10);
             const after  = before + diff;
             const sign   = diff > 0 ? '+' : '';
+            const conclusion = diff === 1 ? 'success' : 'failure';
             const status = diff === 1 ? '✅ PASS' : '❌ FAIL';
 
             const comment = [
@@ -120,9 +121,11 @@ jobs:
                 summary: `Expected exactly 1 video added, got ${diff > 0 ? '+' : ''}${diff}`,
               },
             });
-            await github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['has_video'],
-            });
+            if (conclusion === 'success') {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['has_video'],
+              });
+            }
