@@ -53,5 +53,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: update attachments [skip ci]"
-            git push origin HEAD:${{ github.base_ref }}
+            git push https://x-access-token:${{ secrets.ADMIN_PAT }}@github.com/${{ github.repository }}.git HEAD:${{ github.base_ref }}
           fi
