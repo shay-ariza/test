@@ -11,12 +11,13 @@ permissions:
   pull-requests: write
   issues: write
   contents: write
+  checks: write
 
 jobs:
   video-count-check:
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'pull_request' ||
+      (!contains(github.event.pull_request.labels.*.name, 'skip-video-check') && github.event_name == 'pull_request') ||
       (github.event.issue.pull_request != null && contains(github.event.comment.body, '@video-check'))
     steps:
       - name: Resolve refs (PR event)
@@ -109,3 +110,26 @@ jobs:
             if (diff !== 1) {
               core.setFailed(`Expected exactly 1 video to be added, but diff was ${sign}${diff}`);
             }
+
+      - name: Report check run to PR head (comment-triggered only)
+        if: github.event_name == 'issue_comment'
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ steps.pr_from_api.outputs.head }}
+          VIDEO_DIFF: ${{ steps.video_count_new.outputs.diff }}
+        with:
+          script: |
+            const diff = parseInt(process.env.VIDEO_DIFF, 10);
+            const conclusion = diff === 1 ? 'success' : 'failure';
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'video-count-check',
+              head_sha: process.env.HEAD_SHA,
+              status: 'completed',
+              conclusion,
+              output: {
+                title: diff === 1 ? '✅ PASS' : '❌ FAIL',
+                summary: `Expected exactly 1 video added, got ${diff > 0 ? '+' : ''}${diff}`,
+              },
+            });
