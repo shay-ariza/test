@@ -232,7 +232,7 @@ jobs:
 
       - name: REST POST the content of the artifact
         env:
-          ARTIFACT_URL: ${{ steps.upload_video.outputs.artifact-url }}
+          ARTIFACT_URL: https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ steps.upload_video.outputs.artifact-id }}
           TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
           PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
