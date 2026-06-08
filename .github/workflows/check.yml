@@ -12,10 +12,13 @@ permissions:
   issues: write
   contents: write
   checks: write
+  actions: read
 
 jobs:
   video-count-check:
     runs-on: ubuntu-latest
+    outputs:
+      conclusion: ${{ steps.result.outputs.conclusion }}
     if: |
       (!contains(github.event.pull_request.labels.*.name, 'skip-video-check') && github.event_name == 'pull_request') ||
       (github.event.issue.pull_request != null && contains(github.event.comment.body, '@video-check'))
@@ -168,3 +171,92 @@ jobs:
                 if (e.status !== 404) throw e;
               }
             }
+
+  post-artifact:
+    needs: video-count-check
+    if: needs.video-count-check.outputs.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR metadata (PR event)
+        if: github.event_name == 'pull_request'
+        id: pr_from_event
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          {
+            echo "head=${{ github.event.pull_request.head.ref }}"
+            echo "title<<PR_EOF"
+            echo "$PR_TITLE"
+            echo "PR_EOF"
+            echo "body<<PR_EOF"
+            echo "$PR_BODY"
+            echo "PR_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve PR metadata (comment event)
+        if: github.event_name == 'issue_comment'
+        id: pr_from_api
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_JSON=$(gh pr view ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --json headRefName,title,body)
+          {
+            echo "head=$(echo "$PR_JSON" | jq -r .headRefName)"
+            echo "title<<PR_EOF"
+            echo "$PR_JSON" | jq -r .title
+            echo "PR_EOF"
+            echo "body<<PR_EOF"
+            echo "$PR_JSON" | jq -r .body
+            echo "PR_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
+          fetch-depth: 0
+
+      - name: Upload videos as artifact
+        id: upload_video
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-video
+          path: |
+            attachments/**/*.mov
+            attachments/**/*.mp4
+
+      - name: REST POST the content of the artifact
+        env:
+          ARTIFACT_URL: ${{ steps.upload_video.outputs.artifact-url }}
+          TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
+          PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
+          PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
+        run: |
+          echo "API Download URL: $ARTIFACT_URL"
+          jq -n \
+            --arg token "$TOKEN_SECRET" \
+            --arg url "$ARTIFACT_URL" \
+            --arg text "$PR_BODY" \
+            --arg folderName "$PR_TITLE" \
+            --arg title "fileName.zip" \
+            '{TOKEN: $token, URL: $url, text: $text, folderName: $folderName, title: $title}' \
+          | curl -X POST \
+            "https://default8bcff1709979491e8683d8ced0850b.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/f8ae6c6c9db44c9282cdbdaca3e3149d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=UbwJQjeIyYbYDowL_phSZ7ER3FVLo_6BGHdKnlQet-0" \
+            -H "Content-Type: application/json" \
+            -d @-
+
+      - name: Cleanup
+        env:
+          PR_HEAD: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
+        run: |
+          find attachments -type f \( -name "*.mp4" -o -name "*.mov" \) -delete 2>/dev/null || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update attachments [skip ci]"
+            git push origin HEAD:"$PR_HEAD"
+          fi
