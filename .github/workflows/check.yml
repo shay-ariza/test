@@ -19,20 +19,33 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       conclusion: ${{ steps.result.outputs.conclusion }}
+      componentName: ${{ steps.result.outputs.componentName }}
+      shortDescription: ${{ steps.result.outputs.shortDescription }}
     if: |
       !contains(github.event.pull_request.labels.*.name, 'skip-video-check') &&
       !contains(github.event.issue.labels.*.name, 'skip-video-check') &&
       (
         github.event_name == 'pull_request' ||
-        (github.event.issue.pull_request != null && contains(github.event.comment.body, '@video-check'))
+        (github.event.issue.pull_request != null && contains(github.event.comment.body, '@check-video'))
       )
     steps:
       - name: Resolve refs (PR event)
         if: github.event_name == 'pull_request'
         id: pr_from_event
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          echo "base=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
-          echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          {
+            echo "base=${{ github.event.pull_request.base.ref }}"
+            echo "head=${{ github.event.pull_request.head.sha }}"
+            echo "title<<PR_EOF"
+            echo "$PR_TITLE"
+            echo "PR_EOF"
+            echo "body<<PR_EOF"
+            echo "$PR_BODY"
+            echo "PR_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Resolve refs (comment event)
         if: github.event_name == 'issue_comment'
@@ -40,8 +53,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr view ${{ github.event.issue.number }} --repo ${{ github.repository }} \
-            --json baseRefName,headRefOid --jq '"base="+.baseRefName+"\nhead="+.headRefOid' >> "$GITHUB_OUTPUT"
+          PR_JSON=$(gh pr view ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --json baseRefName,headRefOid,title,body)
+          {
+            echo "base=$(echo "$PR_JSON" | jq -r .baseRefName)"
+            echo "head=$(echo "$PR_JSON" | jq -r .headRefOid)"
+            echo "title<<PR_EOF"
+            echo "$PR_JSON" | jq -r .title
+            echo "PR_EOF"
+            echo "body<<PR_EOF"
+            echo "$PR_JSON" | jq -r .body
+            echo "PR_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Checkout base branch
         uses: actions/checkout@v4
@@ -74,22 +97,43 @@ jobs:
 
       - name: Compute check result
         id: result
+        env:
+          PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
         run: |
           before=${{ steps.video_count_prev.outputs.count_prev }}
           diff=${{ steps.video_count_new.outputs.diff }}
           after=$(( before + diff ))
-          if [ "$diff" -eq 1 ]; then
+
+          # Parse "AIUX-<id>: <short-description>" from the PR title (case-insensitive).
+          # componentName = the aiux-* token (no colon); shortDescription = everything after the colon.
+          shopt -s nocasematch
+          if [[ "$PR_TITLE" =~ (aiux-[^[:space:]:]+)([[:space:]]*:*[[:space:]]*)[[:space:]]*(.*)$ ]]; then
+            titleValid=true
+            componentName="${BASH_REMATCH[1]}"
+            shortDescription="${BASH_REMATCH[3]}"
+          else
+            titleValid=false
+            componentName=""
+            shortDescription=""
+            echo "::warning::PR title does not match 'AIUX-<id>: <short-description>': $PR_TITLE"
+          fi
+          shopt -u nocasematch
+          echo "Resolved componentName: $componentName"
+
+          if [ "$diff" -eq 1 ] && [ "$titleValid" = true ]; then
             conclusion="success"
             status="✅ PASS"
           else
             conclusion="failure"
             status="❌ FAIL"
           fi
-          echo "before=$before"         >> "$GITHUB_OUTPUT"
-          echo "after=$after"           >> "$GITHUB_OUTPUT"
-          echo "diff=$diff"             >> "$GITHUB_OUTPUT"
-          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
-          echo "status=$status"         >> "$GITHUB_OUTPUT"
+          echo "before=$before"                     >> "$GITHUB_OUTPUT"
+          echo "after=$after"                       >> "$GITHUB_OUTPUT"
+          echo "diff=$diff"                          >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion"              >> "$GITHUB_OUTPUT"
+          echo "status=$status"                      >> "$GITHUB_OUTPUT"
+          echo "componentName=$componentName"        >> "$GITHUB_OUTPUT"
+          echo "shortDescription=$shortDescription"  >> "$GITHUB_OUTPUT"
 
       - name: Post PR comment
         uses: actions/github-script@v7
@@ -98,12 +142,16 @@ jobs:
           AFTER: ${{ steps.result.outputs.after }}
           DIFF: ${{ steps.result.outputs.diff }}
           STATUS: ${{ steps.result.outputs.status }}
+          COMPONENT_NAME: ${{ steps.result.outputs.componentName }}
+          SHORT_DESCRIPTION: ${{ steps.result.outputs.shortDescription }}
         with:
           script: |
-            const before = process.env.BEFORE;
-            const after  = process.env.AFTER;
-            const diff   = parseInt(process.env.DIFF, 10);
-            const status = process.env.STATUS;
+            const before    = process.env.BEFORE;
+            const after     = process.env.AFTER;
+            const diff      = parseInt(process.env.DIFF, 10);
+            const status    = process.env.STATUS;
+            const component = process.env.COMPONENT_NAME || '_(unresolved — PR title invalid)_';
+            const shortDesc = process.env.SHORT_DESCRIPTION || '_(unresolved — PR title invalid)_';
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -118,7 +166,12 @@ jobs:
                 `| Videos on PR branch   | ${after}  |`,
                 `| **Net change**        | **${diff > 0 ? '+' : ''}${diff}** |`,
                 '',
-                `**Status:** ${status} (Expected exactly 1 video to be added)`,
+                '| | Parsed from PR title |',
+                '|---|---|',
+                `| Component   | ${component} |`,
+                `| Description | ${shortDesc} |`,
+                '',
+                `**Status:** ${status} (Expected exactly 1 video to be added and a valid PR title)`,
               ].join('\n'),
             });
 
@@ -234,29 +287,18 @@ jobs:
         env:
           ARTIFACT_URL: https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ steps.upload_video.outputs.artifact-id }}
           TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
-          PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
+          COMPONENT_NAME: ${{ needs.video-count-check.outputs.componentName }}
+          SHORT_DESCRIPTION: ${{ needs.video-count-check.outputs.shortDescription }}
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
         run: |
           echo "API Download URL: $ARTIFACT_URL"
-
-          # Parse "AIUX-<id>: <short-description>" from the PR title (case-insensitive).
-          # componentName = the aiux-* token (no colon); description = everything after the colon.
-          shopt -s nocasematch
-          if [[ "$PR_TITLE" =~ (aiux-[^[:space:]:]+)([[:space:]]*:*[[:space:]]*)[[:space:]]*(.*)$ ]]; then
-            componentName="${BASH_REMATCH[1]}"
-            short-description="${BASH_REMATCH[3]}"
-          else
-            echo "::error::PR title does not match 'AIUX-<id>: <short-description>': $PR_TITLE"
-            exit 1
-          fi
-          shopt -u nocasematch
-          echo "Resolved componentName: $componentName"
+          echo "Resolved componentName: $COMPONENT_NAME"
 
           jq -n \
             --arg token "$TOKEN_SECRET" \
             --arg url "$ARTIFACT_URL" \
-            --arg short-description "$short-description" \
-            --arg componentName "$componentName" \
+            --arg short-description "$SHORT_DESCRIPTION" \
+            --arg componentName "$COMPONENT_NAME" \
             --arg fileName "fileName.zip" \
             --arg description "$PR_BODY" \
             '{TOKEN: $token, URL: $url, short-description: $short-description, componentName: $componentName, fileName: $fileName, description: $description}' \
