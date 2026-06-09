@@ -1,4 +1,4 @@
-name: Video Attachment Check
+name: demo-gate
 
 on:
   pull_request:
@@ -235,14 +235,27 @@ jobs:
           ARTIFACT_URL: https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ steps.upload_video.outputs.artifact-id }}
           TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
           PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
-          PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
         run: |
           echo "API Download URL: $ARTIFACT_URL"
+
+          # Parse "AIUX-<id>: <description>" from the PR title (case-insensitive).
+          # folderName = the aiux-* token (no colon); description = everything after the colon.
+          shopt -s nocasematch
+          if [[ "$PR_TITLE" =~ (aiux-[^[:space:]:]+)([[:space:]]*:*[[:space:]]*)[[:space:]]*(.*)$ ]]; then
+            folderName="${BASH_REMATCH[1]}"
+            description="${BASH_REMATCH[3]}"
+          else
+            echo "::error::PR title does not match 'AIUX-<id>: <description>': $PR_TITLE"
+            exit 1
+          fi
+          shopt -u nocasematch
+          echo "Resolved folderName: $folderName"
+
           jq -n \
             --arg token "$TOKEN_SECRET" \
             --arg url "$ARTIFACT_URL" \
-            --arg text "$PR_BODY" \
-            --arg folderName "$PR_TITLE" \
+            --arg text "$description" \
+            --arg folderName "$folderName" \
             --arg title "fileName.zip" \
             '{TOKEN: $token, URL: $url, text: $text, folderName: $folderName, title: $title}' \
           | curl -X POST \
