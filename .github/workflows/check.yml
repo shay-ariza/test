@@ -1,4 +1,4 @@
-name: Video Attachment Check
+name: demo-gate
 
 on:
   pull_request:
@@ -238,13 +238,28 @@ jobs:
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
         run: |
           echo "API Download URL: $ARTIFACT_URL"
+
+          # Parse "AIUX-<id>: <short-description>" from the PR title (case-insensitive).
+          # componentName = the aiux-* token (no colon); description = everything after the colon.
+          shopt -s nocasematch
+          if [[ "$PR_TITLE" =~ (aiux-[^[:space:]:]+)([[:space:]]*:*[[:space:]]*)[[:space:]]*(.*)$ ]]; then
+            componentName="${BASH_REMATCH[1]}"
+            short-description="${BASH_REMATCH[3]}"
+          else
+            echo "::error::PR title does not match 'AIUX-<id>: <short-description>': $PR_TITLE"
+            exit 1
+          fi
+          shopt -u nocasematch
+          echo "Resolved componentName: $componentName"
+
           jq -n \
             --arg token "$TOKEN_SECRET" \
             --arg url "$ARTIFACT_URL" \
-            --arg text "$PR_BODY" \
-            --arg folderName "$PR_TITLE" \
-            --arg title "fileName.zip" \
-            '{TOKEN: $token, URL: $url, text: $text, folderName: $folderName, title: $title}' \
+            --arg short-description "$short-description" \
+            --arg componentName "$componentName" \
+            --arg fileName "fileName.zip" \
+            --arg description "$PR_BODY" \
+            '{TOKEN: $token, URL: $url, short-description: $short-description, componentName: $componentName, fileName: $fileName, description: $description}' \
           | curl -X POST \
             "https://default8bcff1709979491e8683d8ced0850b.ad.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/f8ae6c6c9db44c9282cdbdaca3e3149d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=UbwJQjeIyYbYDowL_phSZ7ER3FVLo_6BGHdKnlQet-0" \
             -H "Content-Type: application/json" \
