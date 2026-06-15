@@ -1,0 +1,20 @@
+name: demo-gate-caller
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  video-check:
+    uses: ./.github/workflows/check.yml
+    with:
+      component_prefix: 'aiux'        # PR title prefix, e.g. "AIUX-123: description"
+      attachments_path: 'attachments' # folder where videos live
+      skip_label: 'skip-video-check'  # label that bypasses the check
+      video_label: 'has_video'        # label applied on pass
+    secrets:
+      TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
+      POWER_AUTOMATE_URL: ${{ secrets.POWER_AUTOMATE_URL }}
