@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   video-count-check:
-    runs-on: ubuntu-latest
+    runs-on: utility-argus
     outputs:
       conclusion: ${{ steps.result.outputs.conclusion }}
       componentName: ${{ steps.result.outputs.componentName }}
@@ -165,9 +165,9 @@ jobs:
             const after     = process.env.AFTER;
             const diff      = parseInt(process.env.DIFF, 10);
             const status    = process.env.STATUS;
+            const component = process.env.COMPONENT_NAME;
+            const shortDesc = process.env.SHORT_DESCRIPTION;
             const prefix    = process.env.COMPONENT_PREFIX;
-            const component = process.env.COMPONENT_NAME || `_(unresolved — expected: ${prefix}-<component-name>: <short description>)_`;
-            const shortDesc = process.env.SHORT_DESCRIPTION || `_(unresolved — expected: ${prefix}-<component-name>: <short description>)_`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -182,7 +182,7 @@ jobs:
                 `| Videos on PR branch   | ${after}  |`,
                 `| **Net change**        | **${diff > 0 ? '+' : ''}${diff}** |`,
                 '',
-                '| | Parsed from PR title |',
+                `|${!component || !shortDesc ? 'unresolved — ' : ''}expected: ${prefix}-<component-name>: <short description>) | Parsed from PR title |`,
                 '|---|---|',
                 `| Component   | ${component} |`,
                 `| Description | ${shortDesc} |`,
@@ -250,7 +250,7 @@ jobs:
   post-artifact:
     needs: video-count-check
     if: needs.video-count-check.outputs.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: utility-argus
     steps:
       - name: Resolve PR metadata (PR event)
         if: github.event_name == 'pull_request'
