@@ -165,6 +165,7 @@ jobs:
             const after     = process.env.AFTER;
             const diff      = parseInt(process.env.DIFF, 10);
             const status    = process.env.STATUS;
+            const prefix    = process.env.COMPONENT_PREFIX;
             const component = process.env.COMPONENT_NAME || `_(unresolved — expected: ${prefix}-<component-name>: <short description>)_`;
             const shortDesc = process.env.SHORT_DESCRIPTION || `_(unresolved — expected: ${prefix}-<component-name>: <short description>)_`;
 
