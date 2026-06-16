@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   video-count-check:
-    runs-on: utility-argus
+    runs-on: ubuntu-latest
     outputs:
       conclusion: ${{ steps.result.outputs.conclusion }}
       componentName: ${{ steps.result.outputs.componentName }}
@@ -250,7 +250,7 @@ jobs:
   post-artifact:
     needs: video-count-check
     if: needs.video-count-check.outputs.conclusion == 'success'
-    runs-on: utility-argus
+    runs-on: ubuntu-latest
     steps:
       - name: Resolve PR metadata (PR event)
         if: github.event_name == 'pull_request'
