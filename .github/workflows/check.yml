@@ -167,7 +167,8 @@ jobs:
             const status    = process.env.STATUS;
             const component = process.env.COMPONENT_NAME;
             const shortDesc = process.env.SHORT_DESCRIPTION;
-            const prefix    = process.env.COMPONENT_PREFIX;
+            const prefix      = process.env.COMPONENT_PREFIX;
+            const titleValid  = !!(component && shortDesc);
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -182,7 +183,7 @@ jobs:
                 `| Videos on PR branch   | ${after}  |`,
                 `| **Net change**        | **${diff > 0 ? '+' : ''}${diff}** |`,
                 '',
-                `|${!component || !shortDesc ? 'unresolved — ' : ''}expected: ${prefix}-<component-name>: <short description>) | Parsed from PR title |`,
+                `| ${titleValid ? '' : `⚠️ unresolved title — expected: \`${prefix}-<component-name>: <short description>\``} | Parsed from PR title |`,
                 '|---|---|',
                 `| Component   | ${component} |`,
                 `| Description | ${shortDesc} |`,
