@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   video-count-check:
-    runs-on: [utilities]
+    runs-on: ubuntu-latest
     outputs:
       conclusion: ${{ steps.result.outputs.conclusion }}
       componentName: ${{ steps.result.outputs.componentName }}
