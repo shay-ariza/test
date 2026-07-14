@@ -20,7 +20,6 @@ jobs:
     with:
       component_prefix: 'aiux'        # PR title prefix, e.g. "AIUX-123: description"
       attachments_path: 'attachments' # folder where videos live
-      skip_label: 'skip-video-check'  # label that bypasses the check
       video_label: 'has_video'        # label applied on pass
       group: 'COE - AIUX component demos'                # default group for videos
     secrets:
