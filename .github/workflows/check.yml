@@ -212,10 +212,7 @@ jobs:
             const component = process.env.COMPONENT_NAME;
             const shortDesc = process.env.SHORT_DESCRIPTION;
             const prefix      = process.env.COMPONENT_PREFIX;
-<<<<<<< Updated upstream
-=======
             const attachmentsPath = process.env.ATTACHMENTS_PATH;
->>>>>>> Stashed changes
             const titleValid  = !!(component && shortDesc);
 
             await github.rest.issues.createComment({
