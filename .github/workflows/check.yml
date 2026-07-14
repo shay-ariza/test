@@ -313,7 +313,7 @@ jobs:
 
       - name: Upload videos as artifact
         id: upload_video
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: new-video
           path: |
