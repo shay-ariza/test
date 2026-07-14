@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   video-count-check:
-    runs-on: devsnc-utility
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       conclusion: ${{ steps.result.outputs.conclusion }}
@@ -286,7 +286,7 @@ jobs:
   post-artifact:
     needs: video-count-check
     if: needs.video-count-check.outputs.conclusion == 'success'
-    runs-on: devsnc-utility
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Pre-run cleanup
