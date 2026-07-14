@@ -5,15 +5,11 @@ on:
     inputs:
       attachments_path:
         description: 'Path to video attachments folder'
-        default: 'attachments'
+        required: true
         type: string
       component_prefix:
         description: 'PR title component prefix (case-insensitive, e.g. "aiux")'
-        default: 'aiux'
-        type: string
-      skip_label:
-        description: 'Label that skips the video check'
-        default: 'skip-video-check'
+        required: true
         type: string
       video_label:
         description: 'Label applied when check passes'
@@ -34,18 +30,14 @@ permissions:
 
 jobs:
   video-count-check:
-    runs-on: ubuntu-latest
+    runs-on: [utilities]
     outputs:
       conclusion: ${{ steps.result.outputs.conclusion }}
       componentName: ${{ steps.result.outputs.componentName }}
       shortDescription: ${{ steps.result.outputs.shortDescription }}
     if: |
-      !contains(github.event.pull_request.labels.*.name, inputs.skip_label) &&
-      !contains(github.event.issue.labels.*.name, inputs.skip_label) &&
-      (
-        github.event_name == 'pull_request' ||
-        (github.event.issue.pull_request != null && contains(github.event.comment.body, '@check-video'))
-      )
+      github.event_name == 'pull_request' ||
+      (github.event.issue.pull_request != null && contains(github.event.comment.body, '@check-video'))
     steps:
       - name: Resolve refs (PR event)
         if: github.event_name == 'pull_request'
@@ -110,16 +102,66 @@ jobs:
           echo "diff=$diff" >> "$GITHUB_OUTPUT"
           echo "Found $count_new video(s) on PR branch (diff: $diff)"
 
+      - name: Check for previous successful runs
+        if: steps.video_count_new.outputs.diff != '1'
+        id: prev_pass
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
+        with:
+          script: |
+            const headSha = process.env.HEAD_SHA;
+
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            let foundPass = false;
+            for (const commit of commits) {
+              if (commit.sha === headSha) continue;
+              const { data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: commit.sha,
+                check_name: 'video-count-check',
+              });
+              if (data.check_runs.some(r => r.conclusion === 'success')) {
+                foundPass = true;
+                break;
+              }
+            }
+
+            if (foundPass) {
+              core.info('Previous successful video-count-check found — issuing carried check run.');
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'video-count-check',
+                head_sha: headSha,
+                status: 'completed',
+                conclusion: 'success',
+                output: {
+                  title: '✅ PASS (carried from prior commit)',
+                  summary: 'A previous commit on this PR already passed video-count-check — this commit inherits that status.',
+                },
+              });
+              core.setOutput('conclusion', 'skipped');
+            }
+            
       - name: Compute check result
+        if: steps.prev_pass.outputs.conclusion != 'skipped'
         id: result
         env:
           PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
+          COMPONENT_PREFIX: ${{ inputs.component_prefix }}
         run: |
           before=${{ steps.video_count_prev.outputs.count_prev }}
           diff=${{ steps.video_count_new.outputs.diff }}
           after=$(( before + diff ))
 
-          prefix="${{ inputs.component_prefix }}"
+          prefix="$COMPONENT_PREFIX"
           shopt -s nocasematch
           if [[ "$PR_TITLE" =~ (${prefix}-[^[:space:]:]+)([[:space:]]*:*[[:space:]]*)[[:space:]]*(.*)$ ]]; then
             titleValid=true
@@ -150,6 +192,7 @@ jobs:
           echo "shortDescription=$shortDescription"  >> "$GITHUB_OUTPUT"
 
       - name: Post PR comment
+        if: steps.prev_pass.outputs.conclusion != 'skipped'
         uses: actions/github-script@v7
         env:
           BEFORE: ${{ steps.result.outputs.before }}
@@ -159,6 +202,7 @@ jobs:
           COMPONENT_NAME: ${{ steps.result.outputs.componentName }}
           SHORT_DESCRIPTION: ${{ steps.result.outputs.shortDescription }}
           COMPONENT_PREFIX: ${{ inputs.component_prefix }}
+          ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
         with:
           script: |
             const before    = process.env.BEFORE;
@@ -168,6 +212,10 @@ jobs:
             const component = process.env.COMPONENT_NAME;
             const shortDesc = process.env.SHORT_DESCRIPTION;
             const prefix      = process.env.COMPONENT_PREFIX;
+<<<<<<< Updated upstream
+=======
+            const attachmentsPath = process.env.ATTACHMENTS_PATH;
+>>>>>>> Stashed changes
             const titleValid  = !!(component && shortDesc);
 
             await github.rest.issues.createComment({
@@ -189,43 +237,19 @@ jobs:
                 `| Description | ${shortDesc} |`,
                 '',
                 `**Status:** ${status} (Expected exactly 1 video to be added and a valid PR title)`,
+                `please make sure only one video is in path: ${attachmentsPath}`,
+                'run again this report using @check-video comment on the PR',
               ].join('\n'),
             });
-
-      - name: Create check run
-        uses: actions/github-script@v7
-        env:
-          HEAD_SHA: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
-          CONCLUSION: ${{ steps.result.outputs.conclusion }}
-          STATUS: ${{ steps.result.outputs.status }}
-          DIFF: ${{ steps.result.outputs.diff }}
-        with:
-          script: |
-            const diff       = parseInt(process.env.DIFF, 10);
-            const conclusion = process.env.CONCLUSION;
-            const status     = process.env.STATUS;
-
-            await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'video-count-check',
-              head_sha: process.env.HEAD_SHA,
-              status: 'completed',
-              conclusion,
-              output: {
-                title: status,
-                summary: `Expected exactly 1 video added, got ${diff > 0 ? '+' : ''}${diff}`,
-              },
-            });
-
       - name: Sync has_video label
+        if: steps.prev_pass.outputs.conclusion != 'skipped'
         uses: actions/github-script@v7
         env:
-          CONCLUSION: ${{ steps.result.outputs.conclusion }}
+          conclusion: ${{ steps.result.outputs.conclusion }}
           VIDEO_LABEL: ${{ inputs.video_label }}
         with:
           script: |
-            const passed = process.env.CONCLUSION === 'success';
+            const passed = process.env.conclusion === 'success';
             const label  = process.env.VIDEO_LABEL;
 
             if (passed) {
@@ -251,7 +275,7 @@ jobs:
   post-artifact:
     needs: video-count-check
     if: needs.video-count-check.outputs.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: [utilities]
     steps:
       - name: Resolve PR metadata (PR event)
         if: github.event_name == 'pull_request'
@@ -292,36 +316,21 @@ jobs:
 
       - name: Upload videos as artifact
         id: upload_video
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: new-video
           path: |
             ${{ inputs.attachments_path }}/**/*.mov
             ${{ inputs.attachments_path }}/**/*.mp4
 
-      - name: REST POST the content of the artifact
+      - name: send-power-automate
         env:
-          ARTIFACT_URL: https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ steps.upload_video.outputs.artifact-id }}
-          TOKEN_SECRET: ${{ secrets.TOKEN_SECRET }}
+          POWER_AUTOMATE_URL: ${{ secrets.POWER_AUTOMATE_URL }}
           COMPONENT_NAME: ${{ needs.video-count-check.outputs.componentName }}
           SHORT_DESCRIPTION: ${{ needs.video-count-check.outputs.shortDescription }}
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
-        run: |
-          echo "API Download URL: $ARTIFACT_URL"
-          echo "Resolved componentName: $COMPONENT_NAME"
-
-          jq -n \
-            --arg token "$TOKEN_SECRET" \
-            --arg url "$ARTIFACT_URL" \
-            --arg shortDescription "$SHORT_DESCRIPTION" \
-            --arg componentName "$COMPONENT_NAME" \
-            --arg fileName "fileName.zip" \
-            --arg description "$PR_BODY" \
-            '{TOKEN: $token, URL: $url, componentName: $componentName, "short-description": $shortDescription, description: $description, fileName: $fileName}' \
-          | curl -X POST \
-            "${{ secrets.POWER_AUTOMATE_URL }}" \
-            -H "Content-Type: application/json" \
-            -d @-
+          ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
+        run: bash .github/scripts/send-power-automate.sh
 
       - name: Cleanup
         id: cleanup
