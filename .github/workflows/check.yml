@@ -330,7 +330,7 @@ jobs:
           SHORT_DESCRIPTION: ${{ needs.video-count-check.outputs.shortDescription }}
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
           ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
-        run: bash .github/scripts/send-power-automate.sh
+        run: bash /.github/scripts/send-power-automate.sh
 
       - name: Cleanup
         id: cleanup
