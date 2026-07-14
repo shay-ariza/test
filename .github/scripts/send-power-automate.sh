@@ -18,12 +18,14 @@ jq -n \
   --arg componentName    "$COMPONENT_NAME" \
   --arg shortDescription "$SHORT_DESCRIPTION" \
   --arg description      "$PR_BODY" \
+  --arg group            "$GROUP" \
   '{
     file:                $file,
     fileName:            $fileName,
     componentName:       $componentName,
     "short-description": $shortDescription,
-    description:         $description
+    description:         $description,
+    group:               $group
   }' > /tmp/payload.json
 
 curl -X POST \
