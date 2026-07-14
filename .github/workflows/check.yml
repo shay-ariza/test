@@ -20,8 +20,6 @@ on:
         required: true
         type: string
     secrets:
-      TOKEN_SECRET:
-        required: true
       POWER_AUTOMATE_URL:
         required: true
 
