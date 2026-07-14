@@ -15,6 +15,10 @@ on:
         description: 'Label applied when check passes'
         default: 'has_video'
         type: string
+      group:
+        description: 'Team/org group submitting the demo (e.g. "aiux", "platform")'
+        required: true
+        type: string
     secrets:
       TOKEN_SECRET:
         required: true
@@ -327,6 +331,7 @@ jobs:
           SHORT_DESCRIPTION: ${{ needs.video-count-check.outputs.shortDescription }}
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
           ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
+          GROUP: ${{ inputs.group }}
         run: bash .github/scripts/send-power-automate.sh
 
       - name: Cleanup
