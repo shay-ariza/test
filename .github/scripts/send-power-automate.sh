@@ -10,10 +10,13 @@ fi
 FILE_NAME=$(basename "$VIDEO_FILE")
 echo "Sending as JSON: $VIDEO_FILE"
 
-base64 -w 0 "$VIDEO_FILE" > /tmp/video_b64.txt
+VIDEO_B64_FILE="$RUNNER_TEMP/video_b64.txt"
+PAYLOAD_FILE="$RUNNER_TEMP/payload.json"
+
+base64 -w 0 "$VIDEO_FILE" > "$VIDEO_B64_FILE"
 
 jq -n \
-  --rawfile file         /tmp/video_b64.txt \
+  --rawfile file         "$VIDEO_B64_FILE" \
   --arg fileName         "$FILE_NAME" \
   --arg componentName    "$COMPONENT_NAME" \
   --arg shortDescription "$SHORT_DESCRIPTION" \
@@ -26,9 +29,9 @@ jq -n \
     "short-description": $shortDescription,
     description:         $description,
     group:               $group
-  }' > /tmp/payload.json
+  }' > "$PAYLOAD_FILE"
 
-curl -X POST \
+curl --fail-with-body -X POST \
   -H "Content-Type: application/json" \
-  -d @/tmp/payload.json \
+  -d @"$PAYLOAD_FILE" \
   "$POWER_AUTOMATE_URL"
