@@ -272,7 +272,7 @@ jobs:
   post-artifact:
     needs: video-count-check
     if: needs.video-count-check.outputs.conclusion == 'success'
-    runs-on: [utilities]
+    runs-on: ubuntu-latest
     steps:
       - name: Resolve PR metadata (PR event)
         if: github.event_name == 'pull_request'
