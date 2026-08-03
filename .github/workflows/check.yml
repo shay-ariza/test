@@ -130,7 +130,29 @@ jobs:
                 summary: `PR title starts with exempt token '${process.env.EXEMPT_NAME}' — video gate skipped entirely (no counting, comment, label change, or archive run).`,
               },
             });
+            
+      - name: Post exempt PR comment
+        if: steps.exempt_check.outputs.matched == 'true'
+        uses: actions/github-script@v7
+        env:
+          EXEMPT_NAME: ${{ steps.exempt_check.outputs.name }}
+        with:
+          script: |
+            const exemptName = process.env.EXEMPT_NAME;
 
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                '## PR Video Attachment Report',
+                '',
+                `**Status:** ✅ PASS (exempt: \`${exemptName}\`)`,
+                '',
+                `PR title starts with the exempt token \`${exemptName}\` — the video gate was skipped entirely (no video counting, label change, or archive run).`,
+              ].join('\n'),
+            });
+            
       - name: Checkout base branch
         if: steps.exempt_check.outputs.matched != 'true'
         uses: actions/checkout@v4
