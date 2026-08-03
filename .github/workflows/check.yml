@@ -15,6 +15,10 @@ on:
         description: 'Label applied when check passes'
         default: 'has_video'
         type: string
+      exempt_title_names:
+        description: 'Comma-separated PR title type tokens (e.g. "maint,chore") that auto-pass the gate. Case-insensitive match against the PR title starting with "<token>:" (optional whitespace before the colon). Empty = no PR is exempt.'
+        default: 'maint'
+        type: string
       group:
         description: 'Team/org group submitting the demo (e.g. "aiux", "platform")'
         required: true
@@ -83,13 +87,59 @@ jobs:
             core.setOutput('title', data.title);
             core.setOutput('body', data.body ?? '');
 
+      - name: Determine exempt status
+        id: exempt_check
+        env:
+          PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
+          EXEMPT_TITLE_NAMES: ${{ inputs.exempt_title_names }}
+        run: |
+          matched=false
+          matched_name=""
+          shopt -s nocasematch
+          IFS=',' read -ra tokens <<< "$EXEMPT_TITLE_NAMES"
+          for raw in "${tokens[@]}"; do
+            token="$(echo "$raw" | xargs)"
+            [ -z "$token" ] && continue
+            if [[ "$PR_TITLE" =~ ^[[:space:]]*${token}[[:space:]]*: ]]; then
+              matched=true
+              matched_name="$token"
+              break
+            fi
+          done
+          shopt -u nocasematch
+          echo "matched=$matched" >> "$GITHUB_OUTPUT"
+          echo "name=$matched_name" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp exempt pass check run
+        if: steps.exempt_check.outputs.matched == 'true'
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
+          EXEMPT_NAME: ${{ steps.exempt_check.outputs.name }}
+        with:
+          script: |
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'video-count-check',
+              head_sha: process.env.HEAD_SHA,
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: `✅ PASS (exempt: ${process.env.EXEMPT_NAME})`,
+                summary: `PR title starts with exempt token '${process.env.EXEMPT_NAME}' — video gate skipped entirely (no counting, comment, label change, or archive run).`,
+              },
+            });
+
       - name: Checkout base branch
+        if: steps.exempt_check.outputs.matched != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.pr_from_event.outputs.base || steps.pr_from_api.outputs.base }}
           fetch-depth: 1
 
       - name: Count videos on base branch
+        if: steps.exempt_check.outputs.matched != 'true'
         id: video_count_prev
         run: |
           count_prev=$(find "${{ inputs.attachments_path }}" -type f \( -name "*.mov" -o -name "*.mp4" \) | wc -l)
@@ -97,12 +147,14 @@ jobs:
           echo "Found $count_prev video(s) on base branch"
 
       - name: Checkout PR branch
+        if: steps.exempt_check.outputs.matched != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.pr_from_event.outputs.head || steps.pr_from_api.outputs.head }}
           fetch-depth: 1
 
       - name: Count videos on PR branch and calculate diff.
+        if: steps.exempt_check.outputs.matched != 'true'
         env:
           VIDEO_COUNT_BEFORE: ${{ steps.video_count_prev.outputs.count_prev }}
         id: video_count_new
@@ -113,7 +165,7 @@ jobs:
           echo "Found $count_new video(s) on PR branch (diff: $diff)"
 
       - name: Check for previous successful runs
-        if: steps.video_count_new.outputs.diff != '1'
+        if: steps.exempt_check.outputs.matched != 'true' && steps.video_count_new.outputs.diff != '1'
         id: prev_pass
         uses: actions/github-script@v7
         env:
@@ -161,7 +213,7 @@ jobs:
             }
             
       - name: Compute check result
-        if: steps.prev_pass.outputs.conclusion != 'skipped'
+        if: steps.exempt_check.outputs.matched != 'true' && steps.prev_pass.outputs.conclusion != 'skipped'
         id: result
         env:
           PR_TITLE: ${{ steps.pr_from_event.outputs.title || steps.pr_from_api.outputs.title }}
@@ -202,7 +254,7 @@ jobs:
           echo "shortDescription=$shortDescription"  >> "$GITHUB_OUTPUT"
 
       - name: Post PR comment
-        if: steps.prev_pass.outputs.conclusion != 'skipped'
+        if: steps.exempt_check.outputs.matched != 'true' && steps.prev_pass.outputs.conclusion != 'skipped'
         uses: actions/github-script@v7
         env:
           BEFORE: ${{ steps.result.outputs.before }}
@@ -249,7 +301,7 @@ jobs:
               ].join('\n'),
             });
       - name: Sync has_video label
-        if: steps.prev_pass.outputs.conclusion != 'skipped'
+        if: steps.exempt_check.outputs.matched != 'true' && steps.prev_pass.outputs.conclusion != 'skipped'
         uses: actions/github-script@v7
         env:
           conclusion: ${{ steps.result.outputs.conclusion }}
