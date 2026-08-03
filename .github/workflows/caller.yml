@@ -22,5 +22,6 @@ jobs:
       attachments_path: 'attachments' # folder where videos live
       video_label: 'has_video'        # label applied on pass
       group: 'COE - AIUX component demos'                # default group for videos
+      exempt_title_names: 'maint,chore'
     secrets:
       POWER_AUTOMATE_URL: ${{ secrets.POWER_AUTOMATE_URL }}
