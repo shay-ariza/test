@@ -332,7 +332,7 @@ jobs:
 
       - name: Upload videos as artifact
         id: upload_video
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3-node20
         with:
           name: new-video
           path: |
@@ -347,7 +347,7 @@ jobs:
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
           ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
           GROUP: ${{ inputs.group }}
-        run: bash .github/scripts/send-power-automate.sh
+        run: bash scripts/send-power-automate.sh
 
       - name: Cleanup
         id: cleanup
@@ -367,13 +367,6 @@ jobs:
             echo "pushed=true" >> "$GITHUB_OUTPUT"
             echo "new_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Clear git credentials
-        if: always()
-        run: |
-          git config --local --unset-all "http.https://$(echo "${{ github.server_url }}" | sed 's|https://||; s|http://||')/.extraheader" || true
-          git config --local --unset-all user.name || true
-          git config --local --unset-all user.email || true
 
       - name: Carry passing check onto cleanup commit
         if: steps.cleanup.outputs.pushed == 'true'
@@ -397,4 +390,8 @@ jobs:
 
       - name: Post-run cleanup
         if: always()
-        run: rm -rf "${GITHUB_WORKSPACE:?}"/*
+        run: |
+          git config --local --unset-all "http.https://$(echo "${{ github.server_url }}" | sed 's|https://||; s|http://||')/.extraheader" || true
+          git config --local --unset-all user.name || true
+          git config --local --unset-all user.email || true
+          rm -rf "${GITHUB_WORKSPACE:?}"/*
