@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   video-check:
-    uses: .github/workflows/demo-gate.yml@main
+    uses: /.github/workflows/demo-gate.yml@main
     with:
       component_prefix: 'aiux'        # PR title prefix, e.g. "AIUX-123: description"
       attachments_path: 'attachments' # folder where videos live
