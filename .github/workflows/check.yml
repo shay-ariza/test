@@ -332,7 +332,7 @@ jobs:
 
       - name: Upload videos as artifact
         id: upload_video
-        uses: actions/upload-artifact@v3-node20
+        uses: actions/upload-artifact@v4
         with:
           name: new-video
           path: |
@@ -347,7 +347,7 @@ jobs:
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
           ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
           GROUP: ${{ inputs.group }}
-        run: bash scripts/send-power-automate.sh
+        run: bash .github/scripts/send-power-automate.sh
 
       - name: Cleanup
         id: cleanup
