@@ -347,7 +347,7 @@ jobs:
           PR_BODY: ${{ steps.pr_from_event.outputs.body || steps.pr_from_api.outputs.body }}
           ATTACHMENTS_PATH: ${{ inputs.attachments_path }}
           GROUP: ${{ inputs.group }}
-        run: bash scripts/send-power-automate.sh
+        run: bash .github/scripts/send-power-automate.sh
 
       - name: Cleanup
         id: cleanup
