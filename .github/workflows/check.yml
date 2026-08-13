@@ -100,7 +100,7 @@ jobs:
           for raw in "${tokens[@]}"; do
             token="$(echo "$raw" | xargs)"
             [ -z "$token" ] && continue
-            if [[ "$PR_TITLE" =~ ^[[:space:]]*${token}[[:space:]]*: ]]; then
+            if [[ "$PR_TITLE" =~ ^[[:space:]]*"${token}"[[:space:]]*: ]]; then
               matched=true
               matched_name="$token"
               break
